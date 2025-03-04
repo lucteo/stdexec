@@ -28,12 +28,12 @@ namespace {
       free_standing_sender_t<ex::bulk_t> snd{};
 
       {
-        constexpr scope_t scope = decltype(snd | ex::bulk(n, f))::scope;
+        constexpr scope_t scope = decltype(snd | ex::bulk(ex::par, n, f))::scope;
         STATIC_REQUIRE(scope == scope_t::free_standing);
       }
 
       {
-        constexpr scope_t scope = decltype(ex::bulk(snd, n, f))::scope;
+        constexpr scope_t scope = decltype(ex::bulk(snd, ex::par, n, f))::scope;
         STATIC_REQUIRE(scope == scope_t::free_standing);
       }
     }
@@ -42,12 +42,12 @@ namespace {
       scheduler_t<ex::bulk_t>::sender_t snd{};
 
       {
-        constexpr scope_t scope = decltype(snd | ex::bulk(n, f))::scope;
+        constexpr scope_t scope = decltype(snd | ex::bulk(ex::par, n, f))::scope;
         STATIC_REQUIRE(scope == scope_t::scheduler);
       }
 
       {
-        constexpr scope_t scope = decltype(ex::bulk(snd, n, f))::scope;
+        constexpr scope_t scope = decltype(ex::bulk(snd, ex::par, n, f))::scope;
         STATIC_REQUIRE(scope == scope_t::scheduler);
       }
     }

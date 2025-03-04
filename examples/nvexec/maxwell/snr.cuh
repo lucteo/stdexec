@@ -356,9 +356,9 @@ namespace repeat_n_detail {
     template <stdexec::__decays_to<repeat_n_sender_t> Self, stdexec::receiver Receiver>
       requires(stdexec::sender_to<Sender, Receiver>)
            && (nvexec::STDEXEC_STREAM_DETAIL_NS::receiver_with_stream_env<Receiver>)
-    friend auto
-      tag_invoke(stdexec::connect_t, Self&& self, Receiver r) -> nvexec::STDEXEC_STREAM_DETAIL_NS::
-        repeat_n::operation_state_t<SenderId, Closure, stdexec::__id<Receiver>> {
+    friend auto tag_invoke(stdexec::connect_t, Self&& self, Receiver r)
+      -> nvexec::STDEXEC_STREAM_DETAIL_NS::repeat_n::
+        operation_state_t<SenderId, Closure, stdexec::__id<Receiver>> {
       return nvexec::STDEXEC_STREAM_DETAIL_NS::repeat_n::
         operation_state_t<SenderId, Closure, stdexec::__id<Receiver>>(
           static_cast<Sender&&>(self.sender_), self.closure_, static_cast<Receiver&&>(r), self.n_);
@@ -420,8 +420,8 @@ auto maxwell_eqs_snr(
            computer,
            repeat_n(
              n_iterations,
-             ex::bulk(accessor.cells, update_h(accessor))
-               | ex::bulk(accessor.cells, update_e(time, dt, accessor))))
+             ex::bulk(ex::par, accessor.cells, update_h(accessor))
+               | ex::bulk(ex::par, accessor.cells, update_e(time, dt, accessor))))
        | ex::then(dump_vtk(write_results, accessor));
 }
 
@@ -435,7 +435,8 @@ void run_snr(
   time_storage_t time{is_gpu_scheduler(computer)};
   fields_accessor accessor = grid.accessor();
 
-  auto init = ex::just() | exec::on(computer, ex::bulk(grid.cells, grid_initializer(dt, accessor)));
+  auto init = ex::just()
+            | exec::on(computer, ex::bulk(ex::par, grid.cells, grid_initializer(dt, accessor)));
   stdexec::sync_wait(init);
 
   auto snd = maxwell_eqs_snr(dt, time.get(), write_vtk, n_iterations, accessor, computer);
