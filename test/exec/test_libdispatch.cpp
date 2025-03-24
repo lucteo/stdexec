@@ -88,4 +88,79 @@ namespace {
       CHECK(e == 999);
     }
   }
+
+  template <class Sched, class Policy>
+  int number_of_threads_in_bulk(Sched sch, const Policy& policy, int n) {
+    std::vector<std::thread::id> tids(n);
+    auto fun = [&tids](std::size_t idx) {
+      tids[idx] = std::this_thread::get_id();
+      std::this_thread::sleep_for(std::chrono::milliseconds{10});
+    };
+
+    auto snd = stdexec::just()            //
+             | stdexec::continues_on(sch) //
+             | stdexec::bulk(policy, tids.size(), fun);
+    stdexec::sync_wait(std::move(snd));
+
+    std::sort(tids.begin(), tids.end());
+    return static_cast<int>(std::unique(tids.begin(), tids.end()) - tids.begin());
+  }
+
+  TEST_CASE(
+    "libdispatch execute bulk work in accordance with the execution policy",
+    "[libdispatch]") {
+    exec::libdispatch_queue queue;
+    auto sch = queue.get_scheduler();
+
+    SECTION("seq execution policy") {
+      REQUIRE(number_of_threads_in_bulk(sch, stdexec::seq, 42) == 1);
+    }
+    SECTION("unseq execution policy") {
+      REQUIRE(number_of_threads_in_bulk(sch, stdexec::unseq, 42) == 1);
+    }
+    SECTION("par execution policy") {
+      REQUIRE(number_of_threads_in_bulk(sch, stdexec::par, 42) > 1);
+    }
+    SECTION("par_unseq execution policy") {
+      REQUIRE(number_of_threads_in_bulk(sch, stdexec::par_unseq, 42) > 1);
+    }
+  }
+
+  template <class Sched, class Policy>
+  int number_of_threads_in_bulk_chunked(Sched sch, const Policy& policy, int n) {
+    std::vector<std::thread::id> tids(n);
+    auto fun = [&tids](std::size_t b, std::size_t e) {
+      while (b < e)
+        tids[b++] = std::this_thread::get_id();
+      std::this_thread::sleep_for(std::chrono::milliseconds{10});
+    };
+
+    auto snd = stdexec::just()            //
+             | stdexec::continues_on(sch) //
+             | stdexec::bulk_chunked(policy, tids.size(), fun);
+    stdexec::sync_wait(std::move(snd));
+
+    std::sort(tids.begin(), tids.end());
+    return static_cast<int>(std::unique(tids.begin(), tids.end()) - tids.begin());
+  }
+
+  TEST_CASE(
+    "libdispatch execute bulk_chunked work in accordance with the execution policy",
+    "[libdispatch]") {
+    exec::libdispatch_queue queue;
+    auto sch = queue.get_scheduler();
+
+    SECTION("seq execution policy") {
+      REQUIRE(number_of_threads_in_bulk_chunked(sch, stdexec::seq, 42) == 1);
+    }
+    SECTION("unseq execution policy") {
+      REQUIRE(number_of_threads_in_bulk_chunked(sch, stdexec::unseq, 42) == 1);
+    }
+    SECTION("par execution policy") {
+      REQUIRE(number_of_threads_in_bulk_chunked(sch, stdexec::par, 42) > 1);
+    }
+    SECTION("par_unseq execution policy") {
+      REQUIRE(number_of_threads_in_bulk_chunked(sch, stdexec::par_unseq, 42) > 1);
+    }
+  }
 } // namespace

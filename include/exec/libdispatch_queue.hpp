@@ -66,10 +66,10 @@ namespace exec {
     struct bulk_shared_state;
 
     template <class Fun, class Shape, class... Args>
-      requires stdexec::__callable<Fun, Shape, Args &...>
+      requires stdexec::__callable<Fun, Shape, Shape, Args &...>
     using bulk_non_throwing = //
       stdexec::__mbool<
-        stdexec::__nothrow_callable<Fun, Shape, Args &...>
+        stdexec::__nothrow_callable<Fun, Shape, Shape, Args &...>
         && noexcept(stdexec::__decayed_std_tuple<Args...>(std::declval<Args>()...))>;
 
     template <class CvrefSenderId, class ReceiverId, class Shape, class Fun, bool MayThrow>
@@ -99,9 +99,8 @@ namespace exec {
 
     struct transform_bulk {
       template <class Data, class Sender>
-      auto operator()(stdexec::bulk_t, Data &&data, Sender &&sndr) {
+      auto operator()(stdexec::bulk_chunked_t, Data &&data, Sender &&sndr) {
         auto [pol, shape, fun] = std::forward<Data>(data);
-        // TODO: handle non-par execution policies
         return bulk_sender_t<Sender, decltype(shape), decltype(fun)>{
           queue_, std::forward<Sender>(sndr), shape, std::move(fun)};
       }
@@ -116,8 +115,15 @@ namespace exec {
     bool operator==(libdispatch_scheduler const &) const = default;
 
     struct domain {
+      template <class Policy>
+      static constexpr bool __can_parallelize =
+        std::same_as<Policy, stdexec::parallel_policy>
+        || std::same_as<Policy, stdexec::parallel_unsequenced_policy>;
+
       // For eager customization
-      template <stdexec::sender_expr_for<stdexec::bulk_t> Sender>
+      // Only transform the sender if we can also parallelize the work
+      template <stdexec::sender_expr_for<stdexec::bulk_chunked_t> Sender>
+        requires __can_parallelize<typename stdexec::__data_of<Sender>::__policy_t>
       auto transform_sender(Sender &&sndr) const noexcept {
         if constexpr (stdexec::__completes_on<Sender, libdispatch_scheduler>) {
           auto sched =
@@ -134,8 +140,10 @@ namespace exec {
         }
       }
 
-      // transform the generic bulk sender into a parallel libdispatch bulk sender
-      template <stdexec::sender_expr_for<stdexec::bulk_t> Sender, class Env>
+      // transform the generic bulk_chunked sender into a parallel libdispatch bulk sender
+      // Only transform the sender if we can also parallelize the work
+      template <stdexec::sender_expr_for<stdexec::bulk_chunked_t> Sender, class Env>
+        requires __can_parallelize<typename stdexec::__data_of<Sender>::__policy_t>
       auto transform_sender(Sender &&sndr, const Env &env) const noexcept {
         if constexpr (stdexec::__completes_on<Sender, libdispatch_scheduler>) {
           auto sched =
@@ -333,7 +341,8 @@ namespace exec {
           auto total_tasks = static_cast<std::uint32_t>(sh_state.num_tasks());
 
           auto computation = [&sh_state, task_id](auto &...args) {
-            sh_state.fun_(task_id, args...);
+            // With libdispatch, our ranges are always of size 1.
+            sh_state.fun_(task_id, task_id + 1, args...);
           };
 
           auto completion = [&](auto &...args) {

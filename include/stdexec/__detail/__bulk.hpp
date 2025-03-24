@@ -100,6 +100,8 @@ namespace stdexec {
 
     template <class _Pol, class _Shape, class _Fun>
     struct __data {
+      using __policy_t = _Pol;
+
       STDEXEC_ATTRIBUTE((no_unique_address)) __policy_wrapper<_Pol> __pol_;
       _Shape __shape_;
       STDEXEC_ATTRIBUTE((no_unique_address)) _Fun __fun_;
