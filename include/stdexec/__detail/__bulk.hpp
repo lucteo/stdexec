@@ -219,7 +219,11 @@ namespace stdexec {
                            __shape_t __begin,
                            __shape_t __end,
                            auto&&... __vs) mutable //
-            noexcept(noexcept(__data.__fun_(__begin++, __vs...))) {
+#if !STDEXEC_MSVC()
+          // TODO: MSVC doesn't like this construct
+          noexcept(noexcept(data_.__fun_(__begin++, __vs...)))
+#endif
+              {
               while (__begin != __end)
                 __func(__begin++, __vs...);
             };
